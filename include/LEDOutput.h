@@ -3,13 +3,10 @@
 #include "FrameBuffer.h"
 #include "HallSensor.h"
 #include "Config.h"
+#include <led-matrix.h>
 #include <atomic>
 #include <thread>
-
-namespace rgb_matrix {
-class RGBMatrix;
-class FrameCanvas;
-}
+#include <vector>
 
 class LEDOutput {
 public:
@@ -30,8 +27,9 @@ private:
     HallSensor&   hall_;
     const Config& cfg_;
 
-    rgb_matrix::RGBMatrix*    matrix_  = nullptr;
-    rgb_matrix::FrameCanvas*  canvas_  = nullptr;
-    std::atomic<bool>         running_{false};
-    std::thread               thread_;
+    rgb_matrix::RGBMatrix*               matrix_  = nullptr;
+    rgb_matrix::FrameCanvas*             canvas_  = nullptr;
+    std::vector<rgb_matrix::Color>       pixelBuf_;
+    std::atomic<bool>                    running_{false};
+    std::thread                          thread_;
 };

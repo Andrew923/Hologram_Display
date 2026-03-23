@@ -31,6 +31,7 @@ bool LEDOutput::start() {
     }
 
     canvas_ = matrix_->CreateFrameCanvas();
+    pixelBuf_.resize(SLICE_W * SLICE_H);
 
     running_ = true;
     thread_  = std::thread(&LEDOutput::run, this);
@@ -56,17 +57,15 @@ void LEDOutput::renderSlice(rgb_matrix::FrameCanvas* canvas,
     int oppositeId = (sliceId + SLICE_COUNT / 2) % SLICE_COUNT;
     const auto& opposite = frame.slices[oppositeId];
 
-    for (int y = 0; y < SLICE_H; ++y) {
-        for (int x = 0; x < SLICE_W; ++x) {
-            const RGB& px = slice[y * SLICE_W + x];
-            // Panel 0 occupies y=[0, SLICE_H)
-            canvas->SetPixel(x, y, px.r, px.g, px.b);
+    // Build contiguous Color buffer for panel 0 and write the whole region in one call.
+    for (int i = 0; i < SLICE_W * SLICE_H; ++i)
+        pixelBuf_[i] = rgb_matrix::Color(slice[i].r, slice[i].g, slice[i].b);
+    canvas->SetPixels(0, 0, SLICE_W, SLICE_H, pixelBuf_.data());
 
-            const RGB& px2 = opposite[y * SLICE_W + x];
-            // Panel 1 occupies y=[SLICE_H, 2*SLICE_H)
-            canvas->SetPixel(x, y + SLICE_H, px2.r, px2.g, px2.b);
-        }
-    }
+    // Build contiguous Color buffer for panel 1 and write the whole region in one call.
+    for (int i = 0; i < SLICE_W * SLICE_H; ++i)
+        pixelBuf_[i] = rgb_matrix::Color(opposite[i].r, opposite[i].g, opposite[i].b);
+    canvas->SetPixels(0, SLICE_H, SLICE_W, SLICE_H, pixelBuf_.data());
 }
 
 void LEDOutput::run() {
