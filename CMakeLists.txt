@@ -47,6 +47,7 @@ target_link_libraries(hologram_display PRIVATE
     rgbmatrix
     pthread
     gpiod
+    atomic
 )
 
 # ---------------------------------------------------------------------------
