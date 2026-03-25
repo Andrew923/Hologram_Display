@@ -33,8 +33,12 @@ public:
     // --- Reader (LED output thread) ---
     // Get a pointer to the most recently completed FrameSet.
     // Blocks until at least one full frame has been committed.
+    // Returns nullptr if shutdown() was called before a frame was available.
     // The returned pointer is valid until the next call to acquireRead().
     const FrameSet* acquireRead();
+
+    // Wake any thread blocked in acquireRead() so it can exit cleanly.
+    void shutdown();
 
 private:
     static constexpr int BUF_COUNT = 3;
@@ -48,4 +52,5 @@ private:
     std::mutex              mutex_;
     std::condition_variable cv_;
     bool                    hasReady_ = false;
+    std::atomic<bool>       shutdown_{false};
 };

@@ -60,6 +60,7 @@ int main(int argc, char* argv[]) {
     }
 
     std::cout << "\nShutting down...\n";
+    fb->shutdown();   // wake LEDOutput thread if blocked in acquireRead()
     leds.stop();
     hall.stop();
     receiver.stop();

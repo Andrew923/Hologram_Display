@@ -30,11 +30,19 @@ void FrameBuffer::commitWrite() {
 
 const FrameSet* FrameBuffer::acquireRead() {
     std::unique_lock<std::mutex> lock(mutex_);
-    cv_.wait(lock, [this] { return hasReady_; });
+    cv_.wait(lock, [this] { return hasReady_ || shutdown_.load(std::memory_order_relaxed); });
+
+    if (!hasReady_)
+        return nullptr; // woken by shutdown()
 
     // Swap ready and read: the reader takes ownership of the ready buffer.
     std::swap(readyIdx_, readIdx_);
     hasReady_ = false;
 
     return &buffers_[readIdx_];
+}
+
+void FrameBuffer::shutdown() {
+    shutdown_.store(true, std::memory_order_relaxed);
+    cv_.notify_all();
 }
