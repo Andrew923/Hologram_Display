@@ -52,20 +52,31 @@ void LEDOutput::renderSlice(rgb_matrix::FrameCanvas* canvas,
                             const FrameSet& frame, int sliceId) {
     const auto& slice = frame.slices[sliceId];
 
-    // Panel 0 (parallel chain 0): shows the slice as-is.
-    // Panel 1 (parallel chain 1): shows the opposite slice (180 degrees away).
-    int oppositeId = (sliceId + SLICE_COUNT / 2) % SLICE_COUNT;
-    const auto& opposite = frame.slices[oppositeId];
+    int dispW = std::min(SLICE_W, cfg_.led_cols);
+    int dispH = std::min(SLICE_H, cfg_.led_rows);
 
-    // Build contiguous Color buffer for panel 0 and write the whole region in one call.
-    for (int i = 0; i < SLICE_W * SLICE_H; ++i)
-        pixelBuf_[i] = rgb_matrix::Color(slice[i].r, slice[i].g, slice[i].b);
-    canvas->SetPixels(0, 0, SLICE_W, SLICE_H, pixelBuf_.data());
+    // Build contiguous Color buffer for the visible region of panel 0.
+    for (int y = 0; y < dispH; ++y)
+        for (int x = 0; x < dispW; ++x)
+            pixelBuf_[y * dispW + x] = rgb_matrix::Color(
+                slice[y * SLICE_W + x].r,
+                slice[y * SLICE_W + x].g,
+                slice[y * SLICE_W + x].b);
+    canvas->SetPixels(0, 0, dispW, dispH, pixelBuf_.data());
 
-    // Build contiguous Color buffer for panel 1 and write the whole region in one call.
-    for (int i = 0; i < SLICE_W * SLICE_H; ++i)
-        pixelBuf_[i] = rgb_matrix::Color(opposite[i].r, opposite[i].g, opposite[i].b);
-    canvas->SetPixels(0, SLICE_H, SLICE_W, SLICE_H, pixelBuf_.data());
+    // Panel 1 (opposite slice) only when using multiple parallel chains.
+    if (cfg_.led_parallel >= 2) {
+        int oppositeId = (sliceId + SLICE_COUNT / 2) % SLICE_COUNT;
+        const auto& opposite = frame.slices[oppositeId];
+
+        for (int y = 0; y < dispH; ++y)
+            for (int x = 0; x < dispW; ++x)
+                pixelBuf_[y * dispW + x] = rgb_matrix::Color(
+                    opposite[y * SLICE_W + x].r,
+                    opposite[y * SLICE_W + x].g,
+                    opposite[y * SLICE_W + x].b);
+        canvas->SetPixels(0, dispH, dispW, dispH, pixelBuf_.data());
+    }
 }
 
 void LEDOutput::run() {
