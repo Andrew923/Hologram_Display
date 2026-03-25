@@ -7,6 +7,7 @@
 #include <iostream>
 #include <csignal>
 #include <atomic>
+#include <memory>
 
 static std::atomic<bool> g_running{true};
 
@@ -34,10 +35,10 @@ int main(int argc, char* argv[]) {
     signal(SIGTERM, signalHandler);
 
     // --- Create components ---
-    FrameBuffer fb;
-    UDPReceiver receiver(fb, cfg.udp_port);
+    auto fb = std::make_unique<FrameBuffer>();
+    UDPReceiver receiver(*fb, cfg.udp_port);
     HallSensor  hall(cfg.hall_gpio_pin);
-    LEDOutput   leds(fb, hall, cfg);
+    LEDOutput   leds(*fb, hall, cfg);
 
     // --- Start everything ---
     if (!receiver.start()) {
