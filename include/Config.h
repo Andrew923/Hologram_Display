@@ -9,6 +9,8 @@ struct Config {
 
     // Hall effect sensor
     int hall_gpio_pin = 17;
+    std::string hall_bias = "pull_up";   // pull_up | pull_down | none
+    std::string hall_edge = "falling";   // falling | rising | both
 
     // LED matrix
     int led_rows           = 64;

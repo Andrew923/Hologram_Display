@@ -33,6 +33,8 @@ bool Config::loadFromFile(const std::string& path) {
 
         if      (key == "udp_port")             udp_port           = std::stoi(val);
         else if (key == "hall_gpio_pin")         hall_gpio_pin      = std::stoi(val);
+        else if (key == "hall_bias")             hall_bias          = val;
+        else if (key == "hall_edge")             hall_edge          = val;
         else if (key == "led_rows")              led_rows           = std::stoi(val);
         else if (key == "led_cols")              led_cols           = std::stoi(val);
         else if (key == "led_parallel")          led_parallel       = std::stoi(val);

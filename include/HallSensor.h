@@ -1,15 +1,16 @@
 #pragma once
 
+#include "Config.h"
 #include <atomic>
 #include <thread>
 #include <functional>
 
 // Reads a hall effect sensor via Linux gpiod.
-// On each rising edge (one full rotation), records the timestamp and
-// computes angular velocity.
+// On each detected edge (one full rotation), records the timestamp and
+// computes angular velocity.  Bias and edge direction are taken from Config.
 class HallSensor {
 public:
-    explicit HallSensor(int gpioPin);
+    explicit HallSensor(const Config& cfg);
     ~HallSensor();
 
     bool start();
@@ -30,6 +31,8 @@ private:
     void run();
 
     int  gpioPin_;
+    std::string bias_;
+    std::string edge_;
     std::atomic<bool>    running_{false};
     std::atomic<int64_t> lastRotationUs_{0};
     std::thread          thread_;
