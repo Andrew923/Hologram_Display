@@ -24,11 +24,13 @@ int main(int argc, char* argv[]) {
     cfg.loadFromFile(cfgPath);
 
     std::cout << "Hologram Display starting\n"
-              << "  UDP port:      " << cfg.udp_port       << "\n"
-              << "  Hall GPIO:     " << cfg.hall_gpio_pin   << "\n"
+              << "  UDP port:      " << cfg.udp_port          << "\n"
+              << "  Hall GPIO:     " << cfg.hall_gpio_pin      << "\n"
+              << "  Hall bias:     " << cfg.hall_bias          << "\n"
+              << "  Hall edge:     " << cfg.hall_edge          << "\n"
               << "  LED panels:    " << cfg.led_parallel
               << " x " << cfg.led_cols << "x" << cfg.led_rows << "\n"
-              << "  Slice count:   " << cfg.slice_count     << "\n";
+              << "  Slice count:   " << cfg.slice_count        << "\n";
 
     // --- Set up signal handling for clean shutdown ---
     signal(SIGINT,  signalHandler);
@@ -37,7 +39,7 @@ int main(int argc, char* argv[]) {
     // --- Create components ---
     auto fb = std::make_unique<FrameBuffer>();
     UDPReceiver receiver(*fb, cfg.udp_port);
-    HallSensor  hall(cfg.hall_gpio_pin);
+    HallSensor  hall(cfg);
     LEDOutput   leds(*fb, hall, cfg);
 
     // --- Start everything ---

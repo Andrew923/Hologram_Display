@@ -3,8 +3,28 @@
 #include <iostream>
 #include <chrono>
 
-HallSensor::HallSensor(int gpioPin)
-    : gpioPin_(gpioPin) {}
+// Maps a config string to a gpiod_line_bias enum value.
+static gpiod_line_bias parseBias(const std::string& s) {
+    if (s == "pull_up")   return GPIOD_LINE_BIAS_PULL_UP;
+    if (s == "pull_down") return GPIOD_LINE_BIAS_PULL_DOWN;
+    if (s == "none")      return GPIOD_LINE_BIAS_DISABLED;
+    std::cerr << "HallSensor: unknown bias '" << s << "', using pull_up\n";
+    return GPIOD_LINE_BIAS_PULL_UP;
+}
+
+// Maps a config string to a gpiod_line_edge enum value.
+static gpiod_line_edge parseEdge(const std::string& s) {
+    if (s == "falling") return GPIOD_LINE_EDGE_FALLING;
+    if (s == "rising")  return GPIOD_LINE_EDGE_RISING;
+    if (s == "both")    return GPIOD_LINE_EDGE_BOTH;
+    std::cerr << "HallSensor: unknown edge '" << s << "', using falling\n";
+    return GPIOD_LINE_EDGE_FALLING;
+}
+
+HallSensor::HallSensor(const Config& cfg)
+    : gpioPin_(cfg.hall_gpio_pin)
+    , bias_(cfg.hall_bias)
+    , edge_(cfg.hall_edge) {}
 
 HallSensor::~HallSensor() {
     stop();
@@ -53,7 +73,8 @@ void HallSensor::run() {
         return;
     }
     gpiod_line_settings_set_direction(settings, GPIOD_LINE_DIRECTION_INPUT);
-    gpiod_line_settings_set_edge_detection(settings, GPIOD_LINE_EDGE_RISING);
+    gpiod_line_settings_set_bias(settings, parseBias(bias_));
+    gpiod_line_settings_set_edge_detection(settings, parseEdge(edge_));
 
     gpiod_line_config* line_cfg = gpiod_line_config_new();
     if (!line_cfg) {
@@ -83,7 +104,8 @@ void HallSensor::run() {
         return;
     }
 
-    std::cout << "HallSensor: monitoring GPIO " << gpioPin_ << "\n";
+    std::cout << "HallSensor: monitoring GPIO " << gpioPin_
+              << "  bias=" << bias_ << "  edge=" << edge_ << "\n";
 
     gpiod_edge_event_buffer* event_buf = gpiod_edge_event_buffer_new(1);
     if (!event_buf) {
@@ -128,3 +150,4 @@ void HallSensor::run() {
     gpiod_line_request_release(request);
     gpiod_chip_close(chip);
 }
+
