@@ -22,7 +22,8 @@ bool LEDOutput::start() {
     opts.hardware_mapping = cfg_.led_hardware_mapping.c_str();
 
     rgb_matrix::RuntimeOptions rtOpts;
-    rtOpts.gpio_slowdown = cfg_.led_gpio_slowdown;
+    rtOpts.gpio_slowdown   = cfg_.led_gpio_slowdown;
+    rtOpts.drop_privileges = 0; // keep root so gpiod can open /dev/gpiochip0 after LED init
 
     matrix_ = rgb_matrix::RGBMatrix::CreateFromOptions(opts, rtOpts);
     if (!matrix_) {
