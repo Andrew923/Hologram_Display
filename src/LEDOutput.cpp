@@ -55,14 +55,18 @@ void LEDOutput::renderSlice(rgb_matrix::FrameCanvas* canvas,
 
     int dispW = std::min(SLICE_W, cfg_.led_cols);
     int dispH = std::min(SLICE_H, cfg_.led_rows);
+    int offX  = (SLICE_W - dispW) / 2;
+    int offY  = (SLICE_H - dispH) / 2;
 
     // Build contiguous Color buffer for the visible region of panel 0.
+    // Sample from the center of the slice so the rotation axis aligns
+    // with the physical center of the LED panel.
     for (int y = 0; y < dispH; ++y)
         for (int x = 0; x < dispW; ++x)
             pixelBuf_[y * dispW + x] = rgb_matrix::Color(
-                slice[y * SLICE_W + x].r,
-                slice[y * SLICE_W + x].g,
-                slice[y * SLICE_W + x].b);
+                slice[(y + offY) * SLICE_W + (x + offX)].r,
+                slice[(y + offY) * SLICE_W + (x + offX)].g,
+                slice[(y + offY) * SLICE_W + (x + offX)].b);
     canvas->SetPixels(0, 0, dispW, dispH, pixelBuf_.data());
 
     // Panel 1 (opposite slice) only when using multiple parallel chains.
@@ -73,9 +77,9 @@ void LEDOutput::renderSlice(rgb_matrix::FrameCanvas* canvas,
         for (int y = 0; y < dispH; ++y)
             for (int x = 0; x < dispW; ++x)
                 pixelBuf_[y * dispW + x] = rgb_matrix::Color(
-                    opposite[y * SLICE_W + x].r,
-                    opposite[y * SLICE_W + x].g,
-                    opposite[y * SLICE_W + x].b);
+                    opposite[(y + offY) * SLICE_W + (x + offX)].r,
+                    opposite[(y + offY) * SLICE_W + (x + offX)].g,
+                    opposite[(y + offY) * SLICE_W + (x + offX)].b);
         canvas->SetPixels(0, dispH, dispW, dispH, pixelBuf_.data());
     }
 }
