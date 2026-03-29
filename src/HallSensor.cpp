@@ -2,6 +2,7 @@
 #include <gpiod.h>
 #include <iostream>
 #include <chrono>
+#include <cerrno>
 
 // Maps a config string to a gpiod_line_bias enum value.
 static gpiod_line_bias parseBias(const std::string& s) {
@@ -124,6 +125,8 @@ void HallSensor::run() {
         // Wait up to 100ms for an edge event
         int ret = gpiod_line_request_wait_edge_events(request, 100'000'000);
         if (ret < 0) {
+            if (errno == EINTR)
+                continue; // signal interrupted the wait — retry
             std::cerr << "HallSensor: event wait error\n";
             break;
         }
