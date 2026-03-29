@@ -47,12 +47,16 @@ int main(int argc, char* argv[]) {
         std::cerr << "Failed to start UDP receiver\n";
         return 1;
     }
-    if (!hall.start()) {
-        std::cerr << "Failed to start hall sensor\n";
-        return 1;
-    }
+    // leds must start before hall: librgbmatrix initialises the BCM GPIO
+    // hardware registers (via /dev/mem) which clears edge-detection bits for
+    // all pins.  Starting leds first ensures those registers are stable before
+    // gpiod begins polling GPIO 26 for hall-sensor edges.
     if (!leds.start()) {
         std::cerr << "Failed to start LED output\n";
+        return 1;
+    }
+    if (!hall.start()) {
+        std::cerr << "Failed to start hall sensor\n";
         return 1;
     }
 
@@ -63,8 +67,8 @@ int main(int argc, char* argv[]) {
 
     std::cout << "\nShutting down...\n";
     fb->shutdown();   // wake LEDOutput thread if blocked in acquireRead()
-    leds.stop();
     hall.stop();
+    leds.stop();
     receiver.stop();
 
     return 0;
