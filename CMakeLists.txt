@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # ---------------------------------------------------------------------------
-# rpi-rgb-led-matrix library (built via its own Makefile, linked as static lib)
+# rpi-rgb-led-matrix library — used only by test binaries, not hologram_display
 # ---------------------------------------------------------------------------
 set(RGB_LIB_DIR ${CMAKE_SOURCE_DIR}/lib/rpi-rgb-led-matrix)
 set(RGB_LIB     ${RGB_LIB_DIR}/lib/librgbmatrix.a)
@@ -26,7 +26,7 @@ set_target_properties(rgbmatrix PROPERTIES
 add_dependencies(rgbmatrix rgbmatrix_build)
 
 # ---------------------------------------------------------------------------
-# Main application
+# Main application — DMA-driven, no rpi-rgb-led-matrix dependency
 # ---------------------------------------------------------------------------
 add_executable(hologram_display
     src/main.cpp
@@ -35,23 +35,22 @@ add_executable(hologram_display
     src/FrameBuffer.cpp
     src/UDPReceiver.cpp
     src/HallSensor.cpp
-    src/LEDOutput.cpp
+    src/hub75_dma.c
+    src/DMAOutput.cpp
 )
 
 target_include_directories(hologram_display PRIVATE
     ${CMAKE_SOURCE_DIR}/include
-    ${RGB_INCLUDE}
 )
 
 target_link_libraries(hologram_display PRIVATE
-    rgbmatrix
     pthread
     gpiod
     atomic
 )
 
 # ---------------------------------------------------------------------------
-# Test executables
+# Test executables (still use rpi-rgb-led-matrix)
 # ---------------------------------------------------------------------------
 add_executable(test_led tests/test_led.cpp src/Config.cpp)
 target_include_directories(test_led PRIVATE
@@ -65,3 +64,13 @@ target_include_directories(test_hall PRIVATE
     ${CMAKE_SOURCE_DIR}/include
 )
 target_link_libraries(test_hall PRIVATE gpiod pthread)
+
+add_executable(test_led_rate tests/test_led_rate.cpp src/Config.cpp)
+target_include_directories(test_led_rate PRIVATE
+    ${CMAKE_SOURCE_DIR}/include
+    ${RGB_INCLUDE}
+)
+target_link_libraries(test_led_rate PRIVATE rgbmatrix pthread)
+
+add_executable(test_mailbox tests/test_mailbox.c)
+target_link_libraries(test_mailbox PRIVATE)

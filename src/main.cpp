@@ -2,7 +2,7 @@
 #include "FrameBuffer.h"
 #include "UDPReceiver.h"
 #include "HallSensor.h"
-#include "LEDOutput.h"
+#include "DMAOutput.h"
 
 #include <iostream>
 #include <csignal>
@@ -40,7 +40,7 @@ int main(int argc, char* argv[]) {
     auto fb = std::make_unique<FrameBuffer>();
     UDPReceiver receiver(*fb, cfg.udp_port);
     HallSensor  hall(cfg);
-    LEDOutput   leds(*fb, hall, cfg);
+    DMAOutput   leds(*fb, hall, cfg);
 
     // --- Start everything ---
     if (!receiver.start()) {
