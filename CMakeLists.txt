@@ -74,3 +74,15 @@ target_link_libraries(test_led_rate PRIVATE rgbmatrix pthread)
 
 add_executable(test_mailbox tests/test_mailbox.c)
 target_link_libraries(test_mailbox PRIVATE)
+
+add_executable(test_dma tests/test_dma.c src/hub75_dma.c)
+target_include_directories(test_dma PRIVATE include)
+target_link_libraries(test_dma PRIVATE)
+
+add_executable(test_dma_rate tests/test_dma_rate.c src/hub75_dma.c)
+target_include_directories(test_dma_rate PRIVATE include)
+target_link_libraries(test_dma_rate PRIVATE)
+
+add_executable(test_colors tests/test_colors.c src/hub75_dma.c)
+target_include_directories(test_colors PRIVATE include)
+target_link_libraries(test_colors PRIVATE)

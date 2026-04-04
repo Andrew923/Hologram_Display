@@ -64,9 +64,9 @@ void LEDOutput::renderSlice(rgb_matrix::FrameCanvas* canvas,
     for (int y = 0; y < dispH; ++y)
         for (int x = 0; x < dispW; ++x)
             pixelBuf_[y * dispW + x] = rgb_matrix::Color(
+                slice[(y + offY) * SLICE_W + (x + offX)].b,
                 slice[(y + offY) * SLICE_W + (x + offX)].r,
-                slice[(y + offY) * SLICE_W + (x + offX)].g,
-                slice[(y + offY) * SLICE_W + (x + offX)].b);
+                slice[(y + offY) * SLICE_W + (x + offX)].g);
     canvas->SetPixels(0, 0, dispW, dispH, pixelBuf_.data());
 
     // Panel 1 (opposite slice) only when using multiple parallel chains.
@@ -77,9 +77,9 @@ void LEDOutput::renderSlice(rgb_matrix::FrameCanvas* canvas,
         for (int y = 0; y < dispH; ++y)
             for (int x = 0; x < dispW; ++x)
                 pixelBuf_[y * dispW + x] = rgb_matrix::Color(
+                    opposite[(y + offY) * SLICE_W + (x + offX)].b,
                     opposite[(y + offY) * SLICE_W + (x + offX)].r,
-                    opposite[(y + offY) * SLICE_W + (x + offX)].g,
-                    opposite[(y + offY) * SLICE_W + (x + offX)].b);
+                    opposite[(y + offY) * SLICE_W + (x + offX)].g);
         canvas->SetPixels(0, dispH, dispW, dispH, pixelBuf_.data());
     }
 }

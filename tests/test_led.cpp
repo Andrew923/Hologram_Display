@@ -72,7 +72,7 @@ int main(int argc, char* argv[]) {
     for (auto& c : solids) {
         if (!g_running) break;
         std::cout << "  Solid " << c.name << "\n";
-        canvas->Fill(c.r, c.g, c.b);
+        canvas->Fill(c.b, c.r, c.g);
         canvas = matrix->SwapOnVSync(canvas);
         waitOrAbort(1500);
     }
@@ -85,7 +85,7 @@ int main(int argc, char* argv[]) {
             uint8_t r = static_cast<uint8_t>(255 * (W - 1 - x) / (W - 1));
             uint8_t b = static_cast<uint8_t>(255 * x / (W - 1));
             for (int y = 0; y < H; ++y)
-                canvas->SetPixel(x, y, r, 0, b);
+                canvas->SetPixel(x, y, b, r, 0);
         }
         canvas = matrix->SwapOnVSync(canvas);
         waitOrAbort(2000);
@@ -99,7 +99,7 @@ int main(int argc, char* argv[]) {
             uint8_t g = static_cast<uint8_t>(255 * (H - 1 - y) / (H - 1));
             uint8_t r = static_cast<uint8_t>(255 * y / (H - 1));
             for (int x = 0; x < W; ++x)
-                canvas->SetPixel(x, y, r, g, 0);
+                canvas->SetPixel(x, y, 0, r, g);
         }
         canvas = matrix->SwapOnVSync(canvas);
         waitOrAbort(2000);
@@ -125,7 +125,7 @@ int main(int argc, char* argv[]) {
             int x = i % W;
             int y = i / W;
             canvas->Clear();
-            canvas->SetPixel(x, y, 255, 255, 0);
+            canvas->SetPixel(x, y, 0, 255, 255);
             canvas = matrix->SwapOnVSync(canvas);
             waitOrAbort(10);
         }
