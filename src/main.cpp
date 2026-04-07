@@ -1,5 +1,6 @@
 #include "Config.h"
 #include "FrameBuffer.h"
+#include "TimingLogger.h"
 #include "UDPReceiver.h"
 #include "HallSensor.h"
 #include "DMAOutput.h"
@@ -36,11 +37,18 @@ int main(int argc, char* argv[]) {
     signal(SIGINT,  signalHandler);
     signal(SIGTERM, signalHandler);
 
+    // --- Optional timing logger ---
+    std::unique_ptr<TimingLogger> timingLogger;
+    if (cfg.debug_timing) {
+        timingLogger = std::make_unique<TimingLogger>(cfg.timing_log_path);
+        std::cout << "  Timing log:    " << cfg.timing_log_path << "\n";
+    }
+
     // --- Create components ---
     auto fb = std::make_unique<FrameBuffer>();
-    UDPReceiver receiver(*fb, cfg.udp_port);
+    UDPReceiver receiver(*fb, cfg.udp_port, timingLogger.get());
     HallSensor  hall(cfg);
-    DMAOutput   leds(*fb, hall, cfg);
+    DMAOutput   leds(*fb, hall, cfg, timingLogger.get());
 
     // --- Start everything ---
     if (!receiver.start()) {

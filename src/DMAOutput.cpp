@@ -5,8 +5,9 @@
 #include <algorithm>
 #include <pthread.h>
 
-DMAOutput::DMAOutput(FrameBuffer& fb, HallSensor& hall, const Config& cfg)
-    : fb_(fb), hall_(hall), cfg_(cfg) {}
+DMAOutput::DMAOutput(FrameBuffer& fb, HallSensor& hall, const Config& cfg,
+                     TimingLogger* logger)
+    : fb_(fb), hall_(hall), cfg_(cfg), logger_(logger) {}
 
 DMAOutput::~DMAOutput() {
     stop();
@@ -53,8 +54,12 @@ void DMAOutput::run() {
 
     while (running_) {
         // Block until a full frame is available from the network thread.
+        int64_t tBeforeAcquire = monoUs();
         const FrameSet* frame = fb_.acquireRead();
         if (!frame) continue;
+
+        if (logger_)
+            logger_->log("led_acquire_read_us", monoUs() - tBeforeAcquire);
 
         int64_t rotUs = hall_.lastRotationUs();
         if (rotUs <= 0) {
@@ -67,6 +72,7 @@ void DMAOutput::run() {
         // Remember which hall edge was current when this frame was acquired.
         int64_t frameEdge = lastEdgeUs_.load(std::memory_order_relaxed);
         int64_t lastSlice  = -1;
+        int64_t lastUpdateUs = 0;
 
         // Display this frame until the next hall edge arrives (= one rotation).
         // Timeout at 2× the expected rotation period to handle stopped motor.
@@ -95,7 +101,16 @@ void DMAOutput::run() {
 
             if (slice != lastSlice) {
                 int opposite = static_cast<int>((slice + SLICE_COUNT / 2) % SLICE_COUNT);
+
+                int64_t tBefore = logger_ ? monoUs() : 0;
                 updatePanels(frame, static_cast<int>(slice), opposite);
+                if (logger_) {
+                    int64_t tAfter = monoUs();
+                    logger_->log("led_update_panels_us", tAfter - tBefore);
+                    if (lastSlice >= 0)
+                        logger_->log("led_slice_interval_us", tBefore - lastUpdateUs);
+                    lastUpdateUs = tBefore;
+                }
                 lastSlice = slice;
             }
             // Tight spin — DMA refreshes the panel in the background.

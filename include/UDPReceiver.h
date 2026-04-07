@@ -1,12 +1,13 @@
 #pragma once
 
 #include "FrameBuffer.h"
+#include "TimingLogger.h"
 #include <atomic>
 #include <thread>
 
 class UDPReceiver {
 public:
-    explicit UDPReceiver(FrameBuffer& fb, int port);
+    UDPReceiver(FrameBuffer& fb, int port, TimingLogger* logger = nullptr);
     ~UDPReceiver();
 
     bool start();
@@ -15,9 +16,10 @@ public:
 private:
     void run();
 
-    FrameBuffer& fb_;
-    int          port_;
-    int          sockfd_ = -1;
+    FrameBuffer&   fb_;
+    int            port_;
+    int            sockfd_ = -1;
+    TimingLogger*  logger_;
     std::atomic<bool> running_{false};
     std::thread       thread_;
 

@@ -43,6 +43,8 @@ bool Config::loadFromFile(const std::string& path) {
         else if (key == "led_gpio_slowdown")     led_gpio_slowdown  = std::stoi(val);
         else if (key == "led_hardware_mapping")  led_hardware_mapping = val;
         else if (key == "slice_count")           slice_count        = std::stoi(val);
+        else if (key == "debug_timing")          debug_timing       = (val == "true" || val == "1");
+        else if (key == "timing_log_path")       timing_log_path    = val;
         else
             std::cerr << "Config: unknown key '" << key << "'\n";
     }
