@@ -24,6 +24,10 @@ struct Config {
     // Display
     int slice_count = 120;
 
+    // Debug
+    bool        debug_timing    = false;
+    std::string timing_log_path = "timing.log";
+
     // Load from a key=value config file. Missing keys keep defaults.
     bool loadFromFile(const std::string& path);
 };

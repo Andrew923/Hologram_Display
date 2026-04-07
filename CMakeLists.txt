@@ -33,6 +33,7 @@ add_executable(hologram_display
     src/Config.cpp
     src/Protocol.cpp
     src/FrameBuffer.cpp
+    src/TimingLogger.cpp
     src/UDPReceiver.cpp
     src/HallSensor.cpp
     src/hub75_dma.c

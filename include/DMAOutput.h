@@ -3,6 +3,7 @@
 #include "FrameBuffer.h"
 #include "HallSensor.h"
 #include "Config.h"
+#include "TimingLogger.h"
 #include "hub75_dma.h"
 
 #include <atomic>
@@ -14,7 +15,8 @@
 // the run() thread updates that buffer as the display rotates.
 class DMAOutput {
 public:
-    DMAOutput(FrameBuffer& fb, HallSensor& hall, const Config& cfg);
+    DMAOutput(FrameBuffer& fb, HallSensor& hall, const Config& cfg,
+              TimingLogger* logger = nullptr);
     ~DMAOutput();
 
     // Start DMA engine and launch the run thread. Returns false on error.
@@ -31,6 +33,7 @@ private:
     FrameBuffer&      fb_;
     HallSensor&       hall_;
     const Config&     cfg_;
+    TimingLogger*     logger_;
     hub75_dma_state_t dma_{};
     std::atomic<bool> running_{false};
     std::thread       thread_;

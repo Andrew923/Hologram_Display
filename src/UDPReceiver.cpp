@@ -11,8 +11,8 @@
 // would be 2 + 128*64*4 = 32770 bytes; 64 KiB is generous.
 static constexpr size_t MAX_DGRAM = 65536;
 
-UDPReceiver::UDPReceiver(FrameBuffer& fb, int port)
-    : fb_(fb), port_(port) {}
+UDPReceiver::UDPReceiver(FrameBuffer& fb, int port, TimingLogger* logger)
+    : fb_(fb), port_(port), logger_(logger) {}
 
 UDPReceiver::~UDPReceiver() {
     stop();
@@ -63,24 +63,40 @@ void UDPReceiver::stop() {
 void UDPReceiver::run() {
     uint8_t buf[MAX_DGRAM];
     Packet pkt;
+    int64_t lastRecvUs = 0;
 
     while (running_) {
         ssize_t n = recv(sockfd_, buf, sizeof(buf), 0);
         if (n <= 0)
             continue; // timeout or error — just retry
 
+        int64_t tRecv = logger_ ? TimingLogger::nowUs() : 0;
+
+        if (logger_) {
+            if (lastRecvUs > 0)
+                logger_->log("udp_inter_packet_us", tRecv - lastRecvUs);
+            lastRecvUs = tRecv;
+        }
+
         if (!decodePacket(buf, static_cast<size_t>(n), pkt)) {
             std::cerr << "UDPReceiver: malformed packet (" << n << " bytes)\n";
             continue;
         }
 
+        if (logger_) logger_->log("udp_decode_us", TimingLogger::nowUs() - tRecv);
+
         if (pkt.flag == FLAG_SLICE) {
+            int64_t tWrite = logger_ ? TimingLogger::nowUs() : 0;
             fb_.writeSlice(pkt.id, pkt.pixels);
+            if (logger_) logger_->log("udp_write_slice_us", TimingLogger::nowUs() - tWrite);
+
             receivedCount_++;
 
             // Once we have a full set of slices, commit the frame.
             if (receivedCount_ >= SLICE_COUNT) {
+                int64_t tCommit = logger_ ? TimingLogger::nowUs() : 0;
                 fb_.commitWrite();
+                if (logger_) logger_->log("udp_frame_commit_us", TimingLogger::nowUs() - tCommit);
                 receivedCount_ = 0;
             }
         }
