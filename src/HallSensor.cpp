@@ -138,15 +138,20 @@ void HallSensor::run() {
             continue;
 
         auto now = Clock::now();
-        if (!firstEdge) {
+        if (firstEdge) {
+            // First edge ever: establish reference timestamp, no callback yet.
+            firstEdge = false;
+            lastEdge  = now;
+        } else {
             auto us = std::chrono::duration_cast<std::chrono::microseconds>(
                           now - lastEdge).count();
+            if (us < 500)
+                continue; // debounce: edge arrived too soon, ignore it
             lastRotationUs_.store(us, std::memory_order_relaxed);
             if (callback_)
                 callback_(us);
+            lastEdge = now;
         }
-        firstEdge = false;
-        lastEdge  = now;
     }
 
     gpiod_edge_event_buffer_free(event_buf);
