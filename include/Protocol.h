@@ -4,7 +4,7 @@
 #include <cstddef>
 
 // Matches the Hologram engine's slicer constants
-static constexpr int SLICE_COUNT = 120;
+static constexpr int SLICE_COUNT = 240;
 static constexpr int SLICE_W     = 128;
 static constexpr int SLICE_H     = 64;
 static constexpr int PIXELS_PER_SLICE = SLICE_W * SLICE_H;
