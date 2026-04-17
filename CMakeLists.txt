@@ -76,6 +76,12 @@ target_link_libraries(test_led_rate PRIVATE rgbmatrix pthread)
 add_executable(test_mailbox tests/test_mailbox.c)
 target_link_libraries(test_mailbox PRIVATE)
 
+add_executable(test_framebuffer tests/test_framebuffer.cpp src/FrameBuffer.cpp)
+target_include_directories(test_framebuffer PRIVATE
+    ${CMAKE_SOURCE_DIR}/include
+)
+target_link_libraries(test_framebuffer PRIVATE pthread)
+
 add_executable(test_dma tests/test_dma.c src/hub75_dma.c)
 target_include_directories(test_dma PRIVATE include)
 target_link_libraries(test_dma PRIVATE)

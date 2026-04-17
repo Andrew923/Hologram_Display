@@ -42,6 +42,19 @@ const FrameSet* FrameBuffer::acquireRead() {
     return &buffers_[readIdx_];
 }
 
+const FrameSet* FrameBuffer::tryAcquireRead() {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    if (!hasReady_)
+        return nullptr;
+
+    // Swap ready and read: the reader takes ownership of the ready buffer.
+    std::swap(readyIdx_, readIdx_);
+    hasReady_ = false;
+
+    return &buffers_[readIdx_];
+}
+
 void FrameBuffer::shutdown() {
     shutdown_.store(true, std::memory_order_relaxed);
     cv_.notify_all();

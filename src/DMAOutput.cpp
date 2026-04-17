@@ -52,14 +52,27 @@ void DMAOutput::run() {
     if (pthread_setschedparam(pthread_self(), SCHED_FIFO, &sp) != 0)
         std::cerr << "DMAOutput: failed to set SCHED_FIFO (running without RT priority)\n";
 
+    const FrameSet* lastGoodFrame = nullptr;
+    int64_t repeatedRotations = 0;
+
     while (running_) {
-        // Block until a full frame is available from the network thread.
-        int64_t tBeforeAcquire = monoUs();
-        const FrameSet* frame = fb_.acquireRead();
-        if (!frame) continue;
+        int64_t tBeforeAcquire = logger_ ? monoUs() : 0;
+        if (const FrameSet* fresh = fb_.tryAcquireRead()) {
+            lastGoodFrame = fresh;
+            repeatedRotations = 0;
+        } else if (lastGoodFrame) {
+            ++repeatedRotations;
+            if (logger_)
+                logger_->log("led_repeated_rotation", repeatedRotations);
+        } else {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            continue;
+        }
 
         if (logger_)
             logger_->log("led_acquire_read_us", monoUs() - tBeforeAcquire);
+
+        const FrameSet* frame = lastGoodFrame;
 
         int64_t rotUs = hall_.lastRotationUs();
         if (rotUs <= 0) {

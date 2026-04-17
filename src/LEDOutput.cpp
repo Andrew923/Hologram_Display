@@ -86,12 +86,17 @@ void LEDOutput::renderSlice(rgb_matrix::FrameCanvas* canvas,
 
 void LEDOutput::run() {
     using Clock = std::chrono::steady_clock;
+    const FrameSet* lastGoodFrame = nullptr;
 
     while (running_) {
-        // Block until a full frame is available
-        const FrameSet* frame = fb_.acquireRead();
-        if (!frame)
+        if (const FrameSet* fresh = fb_.tryAcquireRead())
+            lastGoodFrame = fresh;
+
+        if (!lastGoodFrame) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
             continue;
+        }
+        const FrameSet* frame = lastGoodFrame;
 
         // Wait for the hall sensor to give us a rotation period
         int64_t rotUs = hall_.lastRotationUs();

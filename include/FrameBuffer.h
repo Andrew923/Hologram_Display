@@ -37,6 +37,12 @@ public:
     // The returned pointer is valid until the next call to acquireRead().
     const FrameSet* acquireRead();
 
+    // Non-blocking variant of acquireRead().
+    // Returns nullptr when no newer committed frame is available.
+    // The returned pointer is valid until the next call to acquireRead()
+    // or tryAcquireRead().
+    const FrameSet* tryAcquireRead();
+
     // Wake any thread blocked in acquireRead() so it can exit cleanly.
     void shutdown();
 
