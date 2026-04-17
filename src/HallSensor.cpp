@@ -145,7 +145,7 @@ void HallSensor::run() {
         } else {
             auto us = std::chrono::duration_cast<std::chrono::microseconds>(
                           now - lastEdge).count();
-            if (us < 500)
+            if (us < 800)
                 continue; // debounce: edge arrived too soon, ignore it
             lastRotationUs_.store(us, std::memory_order_relaxed);
             if (callback_)
