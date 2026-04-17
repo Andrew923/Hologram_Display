@@ -36,6 +36,8 @@ public:
     // Returns nullptr if shutdown() was called before a frame was available.
     // The returned pointer is valid until the next call to acquireRead().
     const FrameSet* acquireRead();
+    // Non-blocking variant: returns nullptr if no committed frame is ready.
+    const FrameSet* tryAcquireRead();
 
     // Wake any thread blocked in acquireRead() so it can exit cleanly.
     void shutdown();
