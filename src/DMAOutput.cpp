@@ -57,20 +57,22 @@ void DMAOutput::run() {
 
     while (running_) {
         int64_t tBeforeAcquire = logger_ ? monoUs() : 0;
-        if (const FrameSet* fresh = fb_.tryAcquireRead()) {
+        const FrameSet* fresh = fb_.tryAcquireRead();
+        int64_t acquireUs = logger_ ? (monoUs() - tBeforeAcquire) : 0;
+
+        if (fresh) {
             lastGoodFrame = fresh;
             repeatedRotations = 0;
+            if (logger_)
+                logger_->log("led_acquire_read_us", acquireUs);
         } else if (lastGoodFrame) {
             ++repeatedRotations;
-            if (logger_)
-                logger_->log("led_repeated_rotation", repeatedRotations);
+            if (logger_ && (repeatedRotations == 1 || (repeatedRotations % 100) == 0))
+                logger_->log("led_repeated_rotations", repeatedRotations);
         } else {
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
             continue;
         }
-
-        if (logger_)
-            logger_->log("led_acquire_read_us", monoUs() - tBeforeAcquire);
 
         const FrameSet* frame = lastGoodFrame;
 
