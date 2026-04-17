@@ -53,6 +53,7 @@ void DMAOutput::run() {
         std::cerr << "DMAOutput: failed to set SCHED_FIFO (running without RT priority)\n";
 
     const FrameSet* frame = nullptr;
+    // Persist across loop iterations for per-slice continuity/telemetry.
     int64_t lastSlice = -1;
     int64_t lastUpdateUs = 0;
 
@@ -62,12 +63,13 @@ void DMAOutput::run() {
         if (latest) {
             frame = latest;
             lastSlice = -1; // force refresh even if current slice index is unchanged
+            lastUpdateUs = 0;
             if (logger_)
                 logger_->log("led_frame_swap", 1);
         }
 
         if (!frame) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            std::this_thread::sleep_for(std::chrono::microseconds(200));
             continue;
         }
 
@@ -84,7 +86,6 @@ void DMAOutput::run() {
 
         // Compute current slice index from elapsed time since last edge.
         int64_t elapsed = (edgeUs > 0) ? (nowUs - edgeUs) : 0;
-        if (elapsed < 0) elapsed = 0;
         elapsed = elapsed % rotUs;
 
         int64_t slice = (elapsed * SLICE_COUNT) / rotUs;
