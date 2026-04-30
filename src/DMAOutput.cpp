@@ -26,16 +26,57 @@ bool DMAOutput::start() {
     }
 
     running_ = true;
-    thread_  = std::thread(&DMAOutput::run, this);
+    thread_     = std::thread(&DMAOutput::run, this);
+    rateThread_ = std::thread(&DMAOutput::chainRateLoop, this);
     std::cout << "DMAOutput: started\n";
     return true;
 }
 
 void DMAOutput::stop() {
     running_ = false;
-    if (thread_.joinable())
-        thread_.join();
+    if (thread_.joinable())     thread_.join();
+    if (rateThread_.joinable()) rateThread_.join();
     hub75_dma_shutdown(&dma_);
+}
+
+// Periodically samples the DMA-written chain_timer in a tight loop for ~50 ms,
+// counts distinct values, and prints the resulting refresh rate. Runs at
+// default priority so it doesn't perturb the SCHED_FIFO panel-update thread.
+void DMAOutput::chainRateLoop() {
+    using namespace std::chrono;
+    while (running_) {
+        std::this_thread::sleep_for(seconds(2));
+        if (!running_) break;
+
+        const auto t0 = steady_clock::now();
+        uint32_t prev  = hub75_dma_chain_timer(&dma_);
+        uint32_t first = prev;
+        int      count = 0;
+        const auto deadline = t0 + milliseconds(50);
+        while (steady_clock::now() < deadline) {
+            uint32_t cur = hub75_dma_chain_timer(&dma_);
+            if (cur != prev) { ++count; prev = cur; }
+        }
+        const auto t1 = steady_clock::now();
+        int64_t   wallUs = duration_cast<microseconds>(t1 - t0).count();
+        // STC_LOW is the 1 MHz timer; (prev - first) directly equals the
+        // µs span between the first and last observed chain completions.
+        int64_t   stcUs  = (int64_t)(uint32_t)(prev - first);
+
+        if (count > 0 && wallUs > 0) {
+            double rateHz       = count * 1e6 / (double)wallUs;
+            double intervalUs   = (double)wallUs / count;
+            double avgChainUs   = count > 1 ? (double)stcUs / (count - 1) : 0.0;
+            std::cerr << "[chain] " << count << " refreshes in " << wallUs
+                      << " µs → " << intervalUs << " µs/refresh ("
+                      << rateHz << " Hz), STC delta " << avgChainUs << " µs\n";
+            if (logger_) {
+                logger_->log("chain_refresh_us", (int64_t)intervalUs);
+            }
+        } else {
+            std::cerr << "[chain] no refreshes seen in " << wallUs << " µs\n";
+        }
+    }
 }
 
 void DMAOutput::updatePanels(const FrameSet* frame, int slice0, int slice1) {

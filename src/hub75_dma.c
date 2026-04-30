@@ -104,8 +104,10 @@ static const int HUB75_PINS[] = {
  *   For c = 0..127:
  *     CB_A: GPCLR0 ← all_data_clk  (clear all 12 data pins + CLK)
  *     CB_B: GPSET0 ← pixel_buf[r*128+c]  (set this pixel's data bits)
- *     CB_C: GPSET0 ← clk_set        (CLK rising edge)
- *     CB_D: GPCLR0 ← clk_clr        (CLK falling edge)
+ *     CB_C: GPSET0 ← clk_set        (CLK rising edge — shift register triggers)
+ *   (CB_D for "CLK falling edge" elided: the next pixel's CB_A clears CLK
+ *    along with all data bits, so the explicit fall is redundant. Saves 1
+ *    CB per pixel = 25% of the chain.)
  *   CB_T1: GPSET0 ← oe_set          (blank display)
  *   CB_T2: GPCLR0 ← addr_all_clr    (clear address bits)
  *   CB_T3: GPSET0 ← addr_set[r]     (set address for this row)
@@ -153,7 +155,7 @@ static void build_cb_chain(hub75_dma_state_t *s) {
     uint32_t idx = 0;
 
     for (int row = 0; row < HUB75_ROWS; row++) {
-        /* Column data loop — 128 × 4 CBs */
+        /* Column data loop — 128 × 3 CBs (CB_D elided) */
         for (int col = 0; col < HUB75_COLS; col++) {
             /* CB_A: clear data + clock */
             s->cbs[idx] = (dma_cb_t){
@@ -169,16 +171,11 @@ static void build_cb_chain(hub75_dma_state_t *s) {
             };
             idx++;
 
-            /* CB_C: CLK high */
+            /* CB_C: CLK high (rising edge — shift register samples data here.
+             * The matching CLK-low used to be a separate CB; the next pixel's
+             * CB_A clears CLK as part of its data clear, so we skip it.) */
             s->cbs[idx] = (dma_cb_t){
                 TI, CTRL_BUS(CTRL_CLK_SET), GPSET0_BUS, 4, 0,
-                CB_BUS(idx+1), {0,0}
-            };
-            idx++;
-
-            /* CB_D: CLK low */
-            s->cbs[idx] = (dma_cb_t){
-                TI, CTRL_BUS(CTRL_CLK_CLR), GPCLR0_BUS, 4, 0,
                 CB_BUS(idx+1), {0,0}
             };
             idx++;
@@ -221,14 +218,25 @@ static void build_cb_chain(hub75_dma_state_t *s) {
         };
         idx++;
 
-        /* CB_T6: unblank — last row loops back to CB 0 */
-        uint32_t next = (row < HUB75_ROWS - 1) ? CB_BUS(idx+1) : CB_BUS(0);
+        /* CB_T6: unblank — last row falls through to telemetry CB before loop */
+        uint32_t next = (row < HUB75_ROWS - 1) ? CB_BUS(idx+1) : CB_BUS(NUM_DATA_CBS);
         s->cbs[idx] = (dma_cb_t){
             TI, CTRL_BUS(CTRL_OE_CLR), GPCLR0_BUS, 4, 0,
             next, {0,0}
         };
         idx++;
     }
+
+    /* Telemetry CB: copy the 1 MHz system timer's low word into chain_timer
+     * once per chain pass. CPU samples to derive actual refresh rate. */
+    s->cbs[idx] = (dma_cb_t){
+        TI, STC_LOW_BUS,
+        s->bus_base + TELEMETRY_OFFSET,
+        4, 0,
+        CB_BUS(0),  /* loop back to first CB */
+        {0,0}
+    };
+    idx++;
 
     /* Sanity check */
     if (idx != NUM_CBS) {
@@ -311,10 +319,12 @@ int hub75_dma_init(hub75_dma_state_t *s, int dma_channel) {
     }
 
     /* Set up sub-pointers */
-    s->cbs       = (dma_cb_t*)((char*)s->virt_base + 0);
-    s->pixel_buf = (uint32_t*)((char*)s->virt_base + PIXEL_BUF_OFFSET);
-    s->addr_set  = (uint32_t*)((char*)s->virt_base + ADDR_SET_OFFSET);
-    s->ctrl      = (uint32_t*)((char*)s->virt_base + CTRL_OFFSET);
+    s->cbs         = (dma_cb_t*)((char*)s->virt_base + 0);
+    s->pixel_buf   = (uint32_t*)((char*)s->virt_base + PIXEL_BUF_OFFSET);
+    s->addr_set    = (uint32_t*)((char*)s->virt_base + ADDR_SET_OFFSET);
+    s->ctrl        = (uint32_t*)((char*)s->virt_base + CTRL_OFFSET);
+    s->chain_timer = (volatile uint32_t*)((char*)s->virt_base + TELEMETRY_OFFSET);
+    *s->chain_timer = 0;
 
     /* Configure all HUB75 GPIO pins as outputs */
     for (int i = 0; i < NUM_HUB75_PINS; i++)
@@ -373,6 +383,13 @@ void hub75_dma_shutdown(hub75_dma_state_t *s) {
     }
     if (s->vcio_fd >= 0) { close(s->vcio_fd); s->vcio_fd = -1; }
     if (s->mem_fd  >= 0) { close(s->mem_fd);  s->mem_fd  = -1; }
+}
+
+/* -----------------------------------------------------------------------
+ * Public: hub75_dma_chain_timer
+ * ----------------------------------------------------------------------- */
+uint32_t hub75_dma_chain_timer(const hub75_dma_state_t *s) {
+    return s->chain_timer ? *s->chain_timer : 0u;
 }
 
 /* -----------------------------------------------------------------------

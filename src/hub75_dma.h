@@ -104,12 +104,20 @@ typedef struct {
 /* -----------------------------------------------------------------------
  * DMA buffer layout within the 1 MB mailbox allocation
  *
- *  [0 .. CB_ARRAY_BYTES)         DMA control blocks  (16576 × 32 = 530432 B)
+ *  [0 .. CB_ARRAY_BYTES)         DMA control blocks
  *  [PIXEL_BUF_OFFSET ..)         pixel_buf[32][128]  (16384 B) ← CPU updates this
  *  [ADDR_SET_OFFSET ..)          addr_set[33]        (132 B)
  *  [CTRL_OFFSET ..)              ctrl[8]             (32 B)
+ *  [TELEMETRY_OFFSET ..)         chain_timer         (4 B)   ← DMA writes once per pass
+ *
+ * NUM_DATA_CBS counts the data-shift chain (3 CBs/pixel × 128 cols + 6
+ * transition × 32 rows = 12480). NUM_CBS adds a single telemetry CB at the
+ * end of the loop that copies the BCM2835 1 MHz system timer into
+ * chain_timer; the CPU polls that word to derive the actual chain refresh
+ * rate.
  * ----------------------------------------------------------------------- */
-#define NUM_CBS            16576u
+#define NUM_DATA_CBS       12480u
+#define NUM_CBS            (NUM_DATA_CBS + 1u)
 #define CB_ARRAY_BYTES     (NUM_CBS * 32u)
 #define PIXEL_BUF_OFFSET   CB_ARRAY_BYTES
 #define PIXEL_BUF_BYTES    (HUB75_ROWS * HUB75_COLS * 4u)
@@ -117,8 +125,15 @@ typedef struct {
 #define ADDR_SET_BYTES     (33u * 4u)
 #define CTRL_OFFSET        (ADDR_SET_OFFSET + ADDR_SET_BYTES)
 #define CTRL_BYTES         (8u * 4u)
-#define DMA_BUF_TOTAL      (CTRL_OFFSET + CTRL_BYTES)  /* ~547 KB */
+#define TELEMETRY_OFFSET   (CTRL_OFFSET + CTRL_BYTES)
+#define TELEMETRY_BYTES    4u
+#define DMA_BUF_TOTAL      (TELEMETRY_OFFSET + TELEMETRY_BYTES)
 #define DMA_BUF_ALLOC      (1u << 20)                  /* 1 MB allocation */
+
+/* BCM2835 system timer counter low word (1 MHz, free-running).
+ *   physical: 0x3F003004
+ *   bus:      0x7E003004 */
+#define STC_LOW_BUS        0x7E003004u
 
 /* Indices into ctrl[] */
 #define CTRL_ALL_DATA_CLK  0u
@@ -147,6 +162,7 @@ typedef struct {
     uint32_t *pixel_buf;   /* [row * HUB75_COLS + col] GPSET0 words */
     uint32_t *addr_set;    /* [0..32], row 32 wraps to row 0        */
     uint32_t *ctrl;        /* 8 constant control words              */
+    volatile uint32_t *chain_timer;  /* DMA-written 1 MHz STC_LO at end of each loop */
 
     int dma_channel;
 } hub75_dma_state_t;
@@ -164,6 +180,12 @@ int  hub75_dma_init(hub75_dma_state_t *s, int dma_channel);
 
 /* Stop DMA and release all resources. Safe to call even on partial init. */
 void hub75_dma_shutdown(hub75_dma_state_t *s);
+
+/* Read the latest chain-completion timestamp written by the telemetry CB.
+ * Value is the BCM2835 1 MHz system timer's low word at the moment the
+ * previous chain pass finished; sample twice and count value changes (or
+ * compute deltas) to derive refresh rate. */
+uint32_t hub75_dma_chain_timer(const hub75_dma_state_t *s);
 
 /* Update the pixel buffer for both panels simultaneously from two 128×64 slices.
  * slice0: pixels for panel 0 (Port 1), indexed [y*128+x], y=0..63, x=0..127.
