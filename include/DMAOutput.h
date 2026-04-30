@@ -27,7 +27,6 @@ public:
 
 private:
     void run();
-    void chainRateLoop();
 
     void updatePanels(const FrameSet* frame, int slice0, int slice1);
 
@@ -38,7 +37,6 @@ private:
     hub75_dma_state_t dma_{};
     std::atomic<bool> running_{false};
     std::thread       thread_;
-    std::thread       rateThread_;
 
     // Monotonic microsecond timestamp of the last hall-sensor edge,
     // set via HallSensor callback in start().
