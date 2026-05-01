@@ -1,8 +1,25 @@
 # Hologram Display
 
-A persistence-of-vision (POV) hologram display driven by a Raspberry Pi, an RGB LED matrix panel, and a Hall-effect sensor for rotation synchronization.
+Pi Zero 2 W receiver for a swept-volume persistence-of-vision hologram
+display. Receives 128×64 pixel slices over UDP from the Jetson sender
+([Andrew923/Hologram](https://github.com/Andrew923/Hologram)), drives
+two HUB75 LED panels via DMA, and uses an A3144 Hall-effect sensor to
+sync the panel content to the rotor's angular position.
 
----
+## Architecture
+
+The Pi runs four cooperating threads:
+
+| Thread | Responsibility |
+|---|---|
+| `UDPReceiver` | Decodes RLE slice packets into a triple-buffered `FrameSet` |
+| `HallSensor` (libgpiod) | Times each rotor revolution, debounced to ignore edges within 500 µs |
+| `DMAOutput` (SCHED_FIFO 80) | Each frame, computes current slice index from `(now − lastEdgeUs) × SLICE_COUNT / rotationPeriod`, repacks pixel data into the DMA buffer |
+| Background DMA | Continuously refreshes the panel from `pixel_buf` via a CB chain on DMA channel 5 |
+
+The two panels are mounted 180° apart on the rotor; `DMAOutput` drives
+slice `S` on one panel and slice `S + SLICE_COUNT/2` on the other so a
+single rotor pass covers the full ring of 240 angular positions.
 
 ## Hardware Overview
 
@@ -10,7 +27,7 @@ A persistence-of-vision (POV) hologram display driven by a Raspberry Pi, an RGB 
 |-----------|-------|
 | Raspberry Pi Zero 2 W | Main controller |
 | Adafruit HUB75 Triple Bonnet | LED matrix interface |
-| HUB75 RGB LED matrix panel(s) | Display output |
+| 2× HUB75 RGB LED matrix panels (128×64) | Display output, mounted 180° apart on the rotor |
 | A3144 Hall-effect sensor module | Rotation detection (open-collector output) |
 
 ---
@@ -61,32 +78,40 @@ make -j$(nproc)
 ```
 
 Binaries produced:
-- `hologram_display` – main application
-- `test_hall` – hall sensor diagnostic tool
-- `test_led` – LED matrix diagnostic tool
+| Binary | Purpose |
+|---|---|
+| `hologram_display` | Main application — UDP receiver + DMA driver |
+| `test_hall` | Hall sensor diagnostic |
+| `test_led`, `test_led_rate` | librgbmatrix-based reference LED test (legacy) |
+| `test_dma`, `test_dma_rate` | Direct-DMA test programs |
+| `test_colors` | Color-pin verification |
+| `test_mailbox` | Mailbox / DMA-buffer allocation test |
 
 ---
 
 ## Configuration (`config/default.cfg`)
 
-All settings live in a simple `key=value` file.  Pass an alternate path as the first CLI argument to any binary.
+Settings are `key=value`. Pass an alternate path as the first CLI argument to any binary.
 
 ```
-# Network
-udp_port=4210
-
-# Hall Effect Sensor
-hall_gpio_pin=26        # BCM GPIO number
-hall_bias=pull_up       # pull_up | pull_down | none
-hall_edge=falling       # falling | rising | both
+udp_port=4210                     # incoming slice port
+hall_gpio_pin=3                   # BCM GPIO number
+hall_bias=none                    # pull_up | pull_down | none
+hall_edge=falling                 # falling | rising | both
+led_rows=64
+led_cols=128
+led_parallel=2
+slice_count=240
+debug_timing=false                # write per-event CSV log if true
+timing_log_path=timing.log
 ```
 
 ### `hall_bias`
 | Value | Behaviour |
 |-------|-----------|
-| `pull_up` (default) | Enables the Pi's internal pull-up. **Required for open-collector sensors like A3144.** |
+| `pull_up` | Enables the Pi's internal pull-up. **Required for open-collector sensors like A3144 if no external resistor.** |
 | `pull_down` | Enables the Pi's internal pull-down. |
-| `none` | No internal bias. Use only when an external pull resistor is fitted. |
+| `none` (default) | No internal bias. Use when an external pull resistor is fitted. |
 
 ### `hall_edge`
 | Value | Behaviour |
@@ -97,25 +122,72 @@ hall_edge=falling       # falling | rising | both
 
 ---
 
-## Running `test_hall`
+## Running
 
 ```bash
-sudo ./build/test_hall                           # use config/default.cfg
-sudo ./build/test_hall config/default.cfg        # explicit config
-sudo ./build/test_hall --edge=both               # override edge mode
-sudo ./build/test_hall --bias=none --edge=rising # override both
-sudo ./build/test_hall myconfig.cfg --edge=both  # config + override
+sudo ./build/hologram_display                    # default config (config/default.cfg)
+sudo ./build/hologram_display /path/to/my.cfg    # custom config
 ```
 
-On each timeout (1 s with no edge), the tool prints the current GPIO level together with the active bias and edge settings so you can diagnose stuck-high / stuck-low conditions without guessing.
+`sudo` is required for `/dev/mem` (DMA + GPIO) and `/dev/vcio` (mailbox
+allocation of contiguous DMA memory).
+
+The display listens on UDP port 4210 (configurable) for slice packets
+from the Jetson sender. Each packet carries one of 240 angular slices
+of a 128×64×4-byte RGBA8 image, RLE-compressed in
+column-major RGB888 order. See
+[`include/Protocol.h`](include/Protocol.h) for the wire format.
 
 ---
 
-## Running the Main Application
+## DMA pipeline
+
+The HUB75 panels are driven by a custom DMA chain in
+[`src/hub75_dma.c`](src/hub75_dma.c) (replaces librgbmatrix). Each
+chain pass is **3 control blocks per pixel** (down from 4 — the
+post-shift CLK-clear was redundant since the next pixel's CB_A clears
+CLK along with the data bits) plus 6 transition CBs per row, for
+**12,480 + 1 telemetry** CBs total.
+
+| Metric | Value |
+|---|---|
+| Panel refresh rate | ~300 Hz (measured on Pi Zero 2 W, DMA channel 5) |
+| Per-CB cost | ~280 ns (lite-channel GPIO writes) |
+| Slice dwell @ 3.6 rev/s rotor | ~1.16 ms |
+| CPU `update_panels` per slice swap | ~180 µs |
+
+The chain ends with a single telemetry CB that copies the BCM2835
+1 MHz system timer (`STC_LO`) into a shared-memory slot. Read it via
+`hub75_dma_chain_timer(&dma)` from C++ if you want to derive the
+actual refresh rate at runtime — sample twice and count distinct
+values, or compare to wall-clock for a frequency.
+
+### Why no PWM colour depth
+
+A 2-bit BCM (4 levels per channel = 64 colours) implementation was
+attempted. The chain length math worked out but the latched second
+bit-plane corrupted the image on these specific shift-register chips,
+so it's not in master. Each LED is currently 1 bit per channel = 8
+distinct colours total. The git history has the exploration if it's
+worth revisiting.
+
+---
+
+## Diagnostic Tools
+
+### `test_hall`
 
 ```bash
-sudo ./build/hologram_display                    # default config
-sudo ./build/hologram_display /path/to/my.cfg   # custom config
+sudo ./build/test_hall                           # use config/default.cfg
+sudo ./build/test_hall --edge=both               # override edge mode
+sudo ./build/test_hall --bias=none --edge=rising # override both
 ```
 
-The display receives 128×64 pixel slices via UDP (port 4210 by default) and synchronizes rendering to the hall sensor rotation period.
+On each timeout (1 s with no edge), prints the current GPIO level
+together with the active bias and edge settings so you can diagnose
+stuck-high / stuck-low conditions without guessing.
+
+### `test_dma_rate` / `test_led_rate`
+
+Free-running benchmarks that report raw DMA / librgbmatrix throughput
+without the rest of the application stack.
